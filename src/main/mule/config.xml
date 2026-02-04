@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway"
+    xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit"
+    xmlns:tls="http://www.mulesoft.org/schema/mule/tls"
+    xmlns:http="http://www.mulesoft.org/schema/mule/http"
+    xmlns="http://www.mulesoft.org/schema/mule/core"
+    xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+    xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd 
+http://www.mulesoft.org/schema/mule/tls http://www.mulesoft.org/schema/mule/tls/current/mule-tls.xsd 
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+
+    <!-- Import Commons -->
+    <import file="commons.nodinite.xml" doc:name="commons.nodinite.xml"/>
+    <import file="commons.api.xml" doc:name="commons.api.xml"/>
+    
+    <!-- Global Properties -->
+    <global-property name="app.fullName" value="se.martinservera.integration.app.${app.name}" doc:name="Set app.fullName"/>
+    <global-property name="gp.nodinite.serviceName" value="Invoice Experience API" doc:name="Set gp.nodinite.serviceName"/>
+    
+    <!-- Nodinite Service Name -->
+    <global-property name="gp.nodinite.serviceName" 
+                    value="Invoice Experience API" 
+                    doc:name="Set gp.nodinite.serviceName"/>
+
+    <!-- HTTP Request Config (SAPI Call) -->
+    <http:request-config name="HTTP_Invoice_SAPI_Request_configuration" 
+                        doc:name="HTTP Request configuration" 
+                        basePath="#[vars.requestObject.basePath]">
+        <http:request-connection host="#[vars.requestObject.host]" 
+                                port="#[vars.requestObject.port]" 
+                                protocol="HTTPS"/>
+    </http:request-config>
+    
+    <!-- API Autodiscovery -->
+    <api-gateway:autodiscovery 
+        apiId="${zuul::app.invoice.eapi.autodiscovery.id:123456}" 
+        ignoreBasePath="true" 
+        doc:name="API Autodiscovery" 
+        flowRef="invoice-experience-api-main"/>
+
+</mule>

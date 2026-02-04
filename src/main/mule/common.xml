@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
+      xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+      xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+
+    <!-- Set Main Processing Variables -->
+    <sub-flow name="setMainProcessingVars">
+        <set-variable 
+            variableName="callURI" 
+            value="#[attributes.scheme ++ ':/' ++ attributes.localAddress ++ attributes.requestPath ++ '#' ++ attributes.method]"
+            doc:name="callURI"/>
+        <set-variable 
+            variableName="callURINodinite" 
+            value="#[attributes.scheme ++ ':/' ++ attributes.localAddress ++ attributes.requestPath ++ '#' ++ attributes.method]"
+            doc:name="callURINodinite"/>
+        <set-variable 
+            value="RestAPI" 
+            doc:name="endpointType" 
+            variableName="endpointType"/>
+        <flow-ref doc:name="privateSetMainProcessingVars" 
+                 name="privateSetMainProcessingVars"/>
+    </sub-flow>
+    
+    <!-- Private Set Main Processing Variables -->
+    <sub-flow name="privateSetMainProcessingVars">
+        <set-variable 
+            variableName="mainlog4jCategory" 
+            value="#[output application/java --- p('app.fullName') ++ '.' ++ (lower(vars.operation) default 'ERROR')]"
+            doc:name="mainlog4jCategory"/>
+        <set-variable 
+            variableName="log4jCategory" 
+            value="#[vars.mainLog4jCategory ++ '.call']"
+            doc:name="log4jCategory"/>
+        <ee:transform doc:name="nodiniteLoggerObject">
+            <ee:message/>
+            <ee:variables>
+                <ee:set-variable variableName="nodiniteLoggerObject"><![CDATA[%dw 2.0
+output application/java
+---
+{
+    endpointUri: vars.callURINodinite,
+    endpointName: p('app.name') ++ '.' ++ (vars.operation default 'Unknown'),
+    endpointDirection: 'Receive',
+    endpointType: vars.endpointType,
+    eventDirection: 'ExternalIncomingRequest',
+    logLevel: 'Information',
+    log4jCategory: vars.log4jCategory,
+    log4jLogLevel: 'INFO'
+}]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Set Invoice SAPI Request Variables -->
+    <sub-flow name="setInvoiceSAPIRequestVars">
+        <ee:transform doc:name="requestObject">
+            <ee:message/>
+            <ee:variables>
+                <ee:set-variable resource="dwl/requestObjectInvoiceSAPI.dwl" 
+                               variableName="requestObject"/>
+            </ee:variables>
+        </ee:transform>
+        <set-variable 
+            variableName="callURINodinite" 
+            value="#[output application/json --- vars.requestObject.protocol ++ '://' ++ vars.requestObject.host ++ ':' ++ vars.requestObject.port ++ vars.maskedPath]"
+            doc:name="callURINodinite"/>
+        <ee:transform doc:name="nodiniteLoggerObject">
+            <ee:message/>
+            <ee:variables>
+                <ee:set-variable variableName="nodiniteLoggerObject"><![CDATA[%dw 2.0
+output application/java
+---
+{
+    endpointUri: vars.callURINodinite,
+    endpointName: p('app.name') ++ '.' ++ (vars.operation default 'Unknown'),
+    endpointDirection: 'Send',
+    endpointType: vars.requestObject.requestType,
+    eventDirection: 'ProcessOutgoing',
+    logLevel: 'Information',
+    log4jCategory: vars.log4jCategory,
+    log4jLogLevel: 'INFO'
+}]]></ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+    </sub-flow>
+    
+    <!-- Request to Invoice SAPI -->
+    <sub-flow name="request-to-invoice-sapi">
+        <flow-ref doc:name="setInvoiceSAPIRequestVars" 
+                 name="setInvoiceSAPIRequestVars"/>
+        <flow-ref doc:name="commons.nodinite.log" 
+                 name="commons.nodinite.log"/>
+        <http:request method="#[vars.method]" 
+                     doc:name="Invoice SAPI Request" 
+                     path="#[vars.path]" 
+                     config-ref="HTTP_Invoice_SAPI_Request_configuration">
+            <http:headers><![CDATA[#[vars.xheaders]]]></http:headers>
+        </http:request>
+        <flow-ref doc:name="commons.nodinite.logSuccess" 
+                 name="commons.nodinite.logSuccess"/>
+    </sub-flow>
+    
+    <!-- Error Handler: publishMainErrorHandling -->
+    <error-handler name="publishMainErrorHandling">
+        <on-error-continue enableNotifications="true" 
+                          logException="true" 
+                          doc:name="On Error Continue" 
+                          type="MULE:ROUTING">
+            <set-variable 
+                variableName="logText" 
+                value="#['Missing handling type (entity) : ' ++ error.detailedDescription]"
+                doc:name="logText"/>
+            <flow-ref doc:name="commons.nodinite.logWarning" 
+                     name="commons.nodinite.logWarning"/>
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"message": "Missing handling type (entity) : " ++ error.detailedDescription}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-continue>
+        
+        <on-error-propagate enableNotifications="true" 
+                           logException="true" 
+                           doc:name="On Error Propagate" 
+                           type="HTTP:BAD_REQUEST">
+            <set-variable 
+                variableName="logText" 
+                value="#['Bad Request (400) sending' ++ (vars.entity default 'UnknownEntity') ++ ' to ' ++ (vars.targetSystem default (vars.receivingSystem default 'UnknownSystem'))]"
+                doc:name="logText"/>
+            <set-payload value="#[error.exception.errorMessage.typedValue]" 
+                        doc:name="Set Payload"/>
+            <flow-ref doc:name="commons.nodinite.logDataError" 
+                     name="commons.nodinite.logDataError"/>
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+import * from dw::core::Strings
+output application/json
+---
+{"message": 'Bad Request (400) sending' ++ (vars.operation default 'UnknownOperation') ++ ' to ' ++ (vars.targetSystem default (vars.receivingSystem default 'UnknownSystem'))}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate enableNotifications="true" 
+                           logException="true" 
+                           doc:name="On Error Propagate" 
+                           type="HTTP:NOT_FOUND">
+            <set-variable 
+                variableName="logText" 
+                value="#[output application/java --- 'Not found (404) sending' ++ (vars.operation default 'UnknownOperation') ++ ' to ' ++ (vars.receiverSystem default (vars.receiverSystem.System.Type default 'UnknownSystem'))]"
+                doc:name="logText"/>
+            <flow-ref doc:name="commons.nodinite.logDataError" 
+                     name="commons.nodinite.logDataError"/>
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+import * from dw::core::Strings
+output application/json
+---
+{"message": "Not found: " ++ error.detailedDescription}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate enableNotifications="true" 
+                           logException="true" 
+                           doc:name="On Error Propagate" 
+                           type="ANY">
+            <choice doc:name="Choice">
+                <when expression="#[error.errorType.identifier == 'CONNECTIVITY']">
+                    <set-variable 
+                        variableName="logText" 
+                        value="#['Connection Error: ' ++ error.detailedDescription]"
+                        doc:name="logText"/>
+                    <flow-ref doc:name="commons.nodinite.logDataError" 
+                             name="commons.nodinite.logDataError"/>
+                    <ee:transform doc:name="Transform Message">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"message": "Connection Error: " ++ error.detailedDescription}]]></ee:set-payload>
+                        </ee:message>
+                        <ee:variables>
+                            <ee:set-variable variableName="httpStatus">503</ee:set-variable>
+                        </ee:variables>
+                    </ee:transform>
+                </when>
+                <otherwise>
+                    <set-variable 
+                        variableName="logText" 
+                        value="#['Unexpected Error: ' ++ error.detailedDescription]"
+                        doc:name="logText"/>
+                    <flow-ref doc:name="commons.nodinite.logDataError" 
+                             name="commons.nodinite.logDataError"/>
+                    <ee:transform doc:name="Transform Message">
+                        <ee:message>
+                            <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{"message": "Unexpected Error: " ++ error.detailedDescription}]]></ee:set-payload>
+                        </ee:message>
+                        <ee:variables>
+                            <ee:set-variable variableName="httpStatus">500</ee:set-variable>
+                        </ee:variables>
+                    </ee:transform>
+                </otherwise>
+            </choice>
+        </on-error-propagate>
+    </error-handler>
+    
+    <!-- API Main Error Handler -->
+    <error-handler name="apiMainErrorHandler">
+        <on-error-propagate type="APIKIT:BAD_REQUEST">
+            <set-variable 
+                variableName="logtext" 
+                value="#['Validation error caught when processing API request: ' ++ (error.description default '')]"
+                doc:name="logtext"/>
+            <set-variable 
+                variableName="messageType" 
+                value="#[if(vars.messageType != null) vars.messageType else if (payload.Header.Operation != null) payload.Header.Operation else 'Invoice-Unknown']"
+                doc:name="messageType"/>
+            <flow-ref name="commons.nodinite.logDataError" 
+                     doc:name="commons.nodinite.logDataError"/>
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+import * from dw::core::Strings
+output application/json
+---
+{
+    message: "Bad request", 
+    description: if (!isEmpty(error.description) and contains(error.description, "Location")) 
+                    trim(substringBefore(error.description, "Location")) 
+                 else error.description
+}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:NOT_FOUND">
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+        
+        <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+            <ee:transform doc:name="Transform Message">
+                <ee:message>
+                    <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                </ee:message>
+                <ee:variables>
+                    <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+        </on-error-propagate>
+    </error-handler>
+
+</mule>

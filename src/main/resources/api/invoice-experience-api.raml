@@ -1,0 +1,227 @@
+#%RAML 1.0
+title: Invoice Experience API
+description: |
+  Experience API for accessing Invoice and AR Meta-data from Servo ERP via System API.
+  External API for client applications using Basic Authentication.
+version: v1
+baseUri: https://{host}:{port}/invoice-experience/api/v1
+protocols: [HTTPS]
+
+# =============================================================================
+# SECURITY
+# =============================================================================
+
+securitySchemes:
+  basicAuth:
+    type: Basic Authentication
+    description: Basic authentication for EAPI access
+
+securedBy: [basicAuth]
+
+# =============================================================================
+# BASE URI PARAMETERS
+# =============================================================================
+
+baseUriParameters:
+  host:
+    type: string
+    description: Hostname for the API
+    example: api-low.company.com
+  port:
+    type: number
+    description: Will be 443 for access via http proxy/load balancer which is the intended way, other port for direct access to Mule server
+    default: 443
+    example: 443
+
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
+uses:
+  ms-commons: /exchange_modules/6b0cc649-bee1-4283-b694-bc5d56011f19/ms-commons-lib/1.0.17/ms-commons-lib.raml
+  finance-types: /exchange_modules/6b0cc649-bee1-4283-b694-bc5d56011f19/types-finance/1.0.0/types-finance.raml
+
+# =============================================================================
+# RESOURCES
+# =============================================================================
+
+
+/invoice-metadata:
+  displayName: Invoice Metadata
+  description: Retrieve invoice/AR metadata from Servo ERP
+  
+  get:
+    displayName: Get Invoice Metadata
+    description: |
+      Query invoice metadata by customer number with optional filters.
+      Returns AR records from Servo transaction 830 via System API.
+    
+    is: 
+      - ms-commons.date-filtered
+      - ms-commons.pageable
+      - ms-commons.sortable
+    
+    queryParameters:
+      CustomerNumber:
+        type: string
+        required: true
+        description: Customer number to query invoices for
+        example: "178990"
+      
+      DocumentType:
+        type: finance-types.DocumentTypeEnum
+        required: false
+        default: ALL
+        description: Document type filter
+        example: "DMI"
+    
+    responses:
+      200:
+        description: Successfully retrieved invoice metadata
+        body:
+          application/json:
+            type: object
+            properties:
+              data:
+                type: finance-types.ARRecord[]
+                description: Array of AR records
+              pagination:
+                type: object
+                properties:
+                  currentPage: integer
+                  pageSize: integer
+                  totalItems: integer
+                  totalPages: integer
+            example: |
+              {
+                "data": [
+                  {
+                    "TransactionID": "2025-12-18-13.11.04.057822-830-O-AaB",
+                    "TransactionType": "830",
+                    "TransactionTypeOut": "O",
+                    "Action": "M",
+                    "CreationDate": "2025-12-18",
+                    "CustomerNumber": "178990",
+                    "CompanyCode": "Q1",
+                    "ReferenceNumber": "66089702",
+                    "DocumentNumber": "5502392",
+                    "DocumentDate": "2025-10-01",
+                    "DueDate": "2025-11-05",
+                    "DocumentType": "DMI",
+                    "DocumentTypeDescription": "Debit Memo Invoice",
+                    "OriginalAmount": 537000,
+                    "RemainingAmount": 537000,
+                    "PaidAmount": 0,
+                    "PaymentStatus": "UNPAID",
+                    "Status": "S",
+                    "DebtorNumber": "178990",
+                    "CreditStatus": "S",
+                    "Description": "",
+                    "IsOverdue": false,
+                    "DaysOverdue": 0,
+                    "_metadata": {
+                      "documentTypeDescriptionSV": "Faktura",
+                      "documentTypeDescriptionEN": "Invoice"
+                    }
+                  }
+                ],
+                "pagination": {
+                  "currentPage": 1,
+                  "pageSize": 10,
+                  "totalItems": 1,
+                  "totalPages": 1
+                }
+              }
+      
+      400:
+        description: Bad request - invalid parameters
+        body:
+          application/json:
+            example: |
+              {
+                "error": "Invalid CustomerNumber format"
+              }
+      
+      401:
+        description: Unauthorized - missing or invalid credentials
+        body:
+          application/json:
+            example: |
+              {
+                "error": "Authentication failed"
+              }
+
+      503:
+        description: Service Unavailable - Servo ERP is in maintenance mode
+        body:
+          application/json:
+            example: |
+              {
+                "error": "Servo ERP is currently in maintenance mode",
+                "retryAfter": 300
+              }
+      
+      500:
+        description: Internal server error
+        body:
+          application/json:
+            example: |
+              {
+                "error": "Error communicating with backend services"
+              }
+
+
+/health:
+  displayName: Health Check
+  description: Basic health endpoint
+  get:
+    description: Returns basic health status
+    responses:
+      200:
+        body:
+          application/json:
+            type: finance-types.HealthResponse
+            example: |
+              {
+                "name": "invoice-experience-api",
+                "status": "UP",
+                "timestamp": "2026-01-30T10:30:00Z"
+              }
+
+  /full:
+    displayName: Full Health Check
+    description: Detailed health endpoint with dependency checks
+    get:
+      description: Returns health status including downstream dependencies
+      responses:
+        200:
+          body:
+            application/json:
+              type: finance-types.HealthFullResponse
+              example: |
+                {
+                  "name": "invoice-experience-api",
+                  "status": "UP",
+                  "timestamp": "2026-01-30T10:30:00Z",
+                  "dependencies": {
+                    "name": "invoice-system-api",
+                    "status": "AVAILABLE",
+                    "lastChecked": "2026-01-30T10:29:55Z"
+                  }
+                }
+        503:
+          description: Service unavailable - dependencies down
+          body:
+            application/json:
+              type: finance-types.HealthFullResponse
+              example: |
+                {
+                  "name": "invoice-experience-api",
+                  "status": "DOWN",
+                  "timestamp": "2026-01-30T10:30:00Z",
+                  "dependencies": {
+                    "name": "invoice-system-api",
+                    "status": "UNAVAILABLE",
+                    "lastChecked": "2026-01-30T10:30:00Z"
+                  }
+                }
