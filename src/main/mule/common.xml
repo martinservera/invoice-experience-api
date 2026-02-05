@@ -97,11 +97,14 @@ output application/java
         <flow-ref doc:name="commons.nodinite.log" 
                  name="commons.nodinite.log"/>
         <http:request method="#[vars.method]" 
-                     doc:name="Invoice SAPI Request" 
-                     path="#[vars.path]" 
-                     config-ref="HTTP_Invoice_SAPI_Request_configuration">
-            <http:headers><![CDATA[#[vars.xheaders]]]></http:headers>
-        </http:request>
+             doc:name="Invoice SAPI Request" 
+             path="#[vars.path]" 
+             config-ref="HTTP_Invoice_SAPI_Request_configuration">
+    		<http:headers><![CDATA[#[vars.xheaders ++ {
+        		"client_id": p('zuul::system.Servo.invoice.sapi.client_id'),
+        		"client_secret": p('zuul::system.Servo.invoice.sapi.client_secret')
+    		}]]]></http:headers>
+		</http:request>
         <flow-ref doc:name="commons.nodinite.logSuccess" 
                  name="commons.nodinite.logSuccess"/>
     </sub-flow>
