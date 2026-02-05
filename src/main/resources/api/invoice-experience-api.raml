@@ -4,7 +4,7 @@ description: |
   Experience API for accessing Invoice and AR Meta-data from Servo ERP via System API.
   External API for client applications using Basic Authentication.
 version: v1
-baseUri: https://{host}:{port}/invoice-experience/api/v1
+baseUri: https://{host}:{port}/api/invoice-experience/v1
 protocols: [HTTPS]
 
 # =============================================================================
@@ -29,22 +29,13 @@ baseUriParameters:
     example: api-low.company.com
   port:
     type: number
-    description: Will be 443 for access via http proxy/load balancer which is the intended way, other port for direct access to Mule server
+    description: Port (443 for proxy, direct port for Mule)
     default: 443
     example: 443
 
 # =============================================================================
-# IMPORTS
-# =============================================================================
-
-uses:
-  ms-commons: /exchange_modules/6b0cc649-bee1-4283-b694-bc5d56011f19/ms-commons-lib/1.0.17/ms-commons-lib.raml
-  finance-types: /exchange_modules/6b0cc649-bee1-4283-b694-bc5d56011f19/types-finance/1.0.0/types-finance.raml
-
-# =============================================================================
 # RESOURCES
 # =============================================================================
-
 
 /invoice-metadata:
   displayName: Invoice Metadata
@@ -56,11 +47,6 @@ uses:
       Query invoice metadata by customer number with optional filters.
       Returns AR records from Servo transaction 830 via System API.
     
-    is: 
-      - ms-commons.date-filtered
-      - ms-commons.pageable
-      - ms-commons.sortable
-    
     queryParameters:
       CustomerNumber:
         type: string
@@ -69,11 +55,64 @@ uses:
         example: "178990"
       
       DocumentType:
-        type: finance-types.DocumentTypeEnum
+        type: string
         required: false
         default: ALL
-        description: Document type filter
+        enum: [ALL, DMI, DMC, IND, REF, FER]
+        description: |
+          Document type filter:
+          - ALL: All document types
+          - DMI: Debit Memo Invoice (Faktura)
+          - DMC: Debit Memo Credit (Kreditnota)
+          - IND: Interest Invoice (Räntefaktura)
+          - REF: Reminder Fee (Förseningsavgift)
+          - FER: Collection Fee (Inkassoavgift)
         example: "DMI"
+      
+      from:
+        type: date-only
+        required: false
+        description: Start date filter (YYYY-MM-DD)
+        example: "2025-01-01"
+      
+      upto:
+        type: date-only
+        required: false
+        description: End date filter (YYYY-MM-DD)
+        example: "2025-12-31"
+      
+      page:
+        type: integer
+        required: false
+        default: 1
+        minimum: 1
+        description: Page number (1-indexed)
+        example: 1
+      
+      pageSize:
+        type: integer
+        required: false
+        default: 10
+        minimum: 1
+        maximum: 100
+        description: Number of items per page
+        example: 10
+      
+      sortBy:
+        type: string
+        required: false
+        default: DocumentDate
+        enum: [DocumentDate, DueDate, DocumentNumber, DocumentType, OriginalAmount, RemainingAmount]
+        description: Field to sort by
+        example: DocumentDate
+      
+      sortOrder:
+        type: string
+        required: false
+        default: desc
+        enum: [asc, desc]
+        description: Sort order (ascending or descending)
+        example: desc
     
     responses:
       200:
@@ -83,8 +122,34 @@ uses:
             type: object
             properties:
               data:
-                type: finance-types.ARRecord[]
+                type: array
                 description: Array of AR records
+                items:
+                  type: object
+                  properties:
+                    TransactionID: string
+                    TransactionType: string
+                    TransactionTypeOut: string
+                    Action: string
+                    CreationDate: date-only
+                    CustomerNumber: string
+                    CompanyCode: string
+                    ReferenceNumber: string
+                    DocumentNumber: string
+                    DocumentDate: date-only
+                    DueDate: date-only
+                    DocumentType: string
+                    DocumentTypeDescription: string
+                    OriginalAmount: number
+                    RemainingAmount: number
+                    PaidAmount: number
+                    PaymentStatus: string
+                    Status: string
+                    DebtorNumber: string
+                    CreditStatus: string
+                    Description: string
+                    IsOverdue: boolean
+                    DaysOverdue: integer
               pagination:
                 type: object
                 properties:
@@ -118,11 +183,7 @@ uses:
                     "CreditStatus": "S",
                     "Description": "",
                     "IsOverdue": false,
-                    "DaysOverdue": 0,
-                    "_metadata": {
-                      "documentTypeDescriptionSV": "Faktura",
-                      "documentTypeDescriptionEN": "Invoice"
-                    }
+                    "DaysOverdue": 0
                   }
                 ],
                 "pagination": {
@@ -137,6 +198,9 @@ uses:
         description: Bad request - invalid parameters
         body:
           application/json:
+            type: object
+            properties:
+              error: string
             example: |
               {
                 "error": "Invalid CustomerNumber format"
@@ -146,6 +210,9 @@ uses:
         description: Unauthorized - missing or invalid credentials
         body:
           application/json:
+            type: object
+            properties:
+              error: string
             example: |
               {
                 "error": "Authentication failed"
@@ -155,6 +222,10 @@ uses:
         description: Service Unavailable - Servo ERP is in maintenance mode
         body:
           application/json:
+            type: object
+            properties:
+              error: string
+              retryAfter: integer
             example: |
               {
                 "error": "Servo ERP is currently in maintenance mode",
@@ -165,11 +236,13 @@ uses:
         description: Internal server error
         body:
           application/json:
+            type: object
+            properties:
+              error: string
             example: |
               {
                 "error": "Error communicating with backend services"
               }
-
 
 /health:
   displayName: Health Check
@@ -180,7 +253,13 @@ uses:
       200:
         body:
           application/json:
-            type: finance-types.HealthResponse
+            type: object
+            properties:
+              name: string
+              status: string
+              timestamp:
+                type: datetime
+                required: false
             example: |
               {
                 "name": "invoice-experience-api",
@@ -197,7 +276,17 @@ uses:
         200:
           body:
             application/json:
-              type: finance-types.HealthFullResponse
+              type: object
+              properties:
+                name: string
+                status: string
+                timestamp: datetime
+                dependencies:
+                  type: object
+                  properties:
+                    name: string
+                    status: string
+                    lastChecked: datetime
               example: |
                 {
                   "name": "invoice-experience-api",
@@ -213,7 +302,17 @@ uses:
           description: Service unavailable - dependencies down
           body:
             application/json:
-              type: finance-types.HealthFullResponse
+              type: object
+              properties:
+                name: string
+                status: string
+                timestamp: datetime
+                dependencies:
+                  type: object
+                  properties:
+                    name: string
+                    status: string
+                    lastChecked: datetime
               example: |
                 {
                   "name": "invoice-experience-api",

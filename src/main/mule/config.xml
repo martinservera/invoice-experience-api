@@ -18,8 +18,7 @@ http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/m
     <import file="commons.api.xml" doc:name="commons.api.xml"/>
     
     <!-- Global Properties -->
-    <global-property name="app.fullName" value="se.martinservera.integration.app.${app.name}" doc:name="Set app.fullName"/>
-    <global-property name="gp.nodinite.serviceName" value="Invoice Experience API" doc:name="Set gp.nodinite.serviceName"/>
+    <global-property name="app.fullName" value="se.martinservera.integration.app.${app.name}" doc:name="Set app.fullName"/>    
     
     <!-- Nodinite Service Name -->
     <global-property name="gp.nodinite.serviceName" 
@@ -37,7 +36,7 @@ http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/m
     
     <!-- API Autodiscovery -->
     <api-gateway:autodiscovery 
-        apiId="${zuul::app.invoice.eapi.autodiscovery.id:123456}" 
+        apiId="${zuul::app.invoice.eapi.autodiscovery.id:2683666}" 
         ignoreBasePath="true" 
         doc:name="API Autodiscovery" 
         flowRef="invoice-experience-api-main"/>
