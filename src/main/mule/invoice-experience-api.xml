@@ -72,66 +72,19 @@ output application/java
 }]]></ee:set-attributes>
             </ee:message>
         </ee:transform>
-    </flow>
-    <!-- Set Sender Object -->
-    <sub-flow name="setSenderObject">
-        <set-variable variableName="Header" value="#[output application/json --- { Sender: vars.senderObject, Receiver: { System: { Name: &quot;Invoice Experience API&quot;, Type: &quot;Mule&quot; } }, UltimateReceiver: { System: { Name: &quot;Servo Invoice System API&quot;, Type: &quot;Mule&quot; } }, MessageType: &quot;get-invoice-metadata&quot;, Arguments: { Identifier1: vars.CustomerNumber, TransactionID: correlationId, IntegrationName: vars.operation } }]" doc:name="Header" />
-    </sub-flow>
+    </flow>        
     <!-- GET /invoice-metadata Implementation -->
-    <flow name="get:\invoice-metadata:invoice-experience-api-config">
-        <logger level="INFO" doc:name="Logger" message="#[payload]" />
-        <!-- Extract Query Parameters to Variables -->
-        <ee:transform doc:name="paramToVars">
-            <ee:message />
-            <ee:variables>
-                <ee:set-variable variableName="CustomerNumber"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.CustomerNumber]]></ee:set-variable>
-                <ee:set-variable variableName="DocumentType"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.DocumentType default "ALL"]]></ee:set-variable>
-                <ee:set-variable variableName="from"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.from]]></ee:set-variable>
-                <ee:set-variable variableName="upto"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.upto]]></ee:set-variable>
-                <ee:set-variable variableName="page"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.page default "1"]]></ee:set-variable>
-                <ee:set-variable variableName="pageSize"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.pageSize default "10"]]></ee:set-variable>
-                <ee:set-variable variableName="sortBy"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.sortBy default "DocumentDate"]]></ee:set-variable>
-                <ee:set-variable variableName="sortOrder"><![CDATA[%dw 2.0
-output application/java
----
-attributes.queryParams.sortOrder default "desc"]]></ee:set-variable>
-            </ee:variables>
-        </ee:transform>
-        <!-- Set Sender Object -->
-        <flow-ref doc:name="setSenderObject" name="setSenderObject" />
-        <!-- Set Operation -->
-        <set-variable value="get-invoice-metadata" doc:name="operation" variableName="operation" />
-        <!-- Set Header -->
-        <set-variable variableName="Header" value="#[output application/json --- { Sender: vars.senderObject, Receiver: { System: { Name: &quot;Invoice Experience API&quot;, Type: &quot;Mule&quot; } }, UltimateReceiver: { System: { Name: &quot;Servo Invoice System API&quot;, Type: &quot;Mule&quot; } }, MessageType: &quot;get-invoice-metadata&quot;, Arguments: { Identifier1: vars.CustomerNumber, TransactionID: correlationId, IntegrationName: vars.operation } }]" doc:name="Header" />
-        <!-- Set Operation Real Name -->
-        <set-variable value="Get Invoice Metadata" doc:name="operationRealName" variableName="operationRealName" />
-        <!-- Retain Transient Variables (från commons.api.xml) -->
-        <flow-ref doc:name="commons.api.retainTransientVariables" name="commons.api.retainTransientVariables" />
-        <!-- Call Main Implementation -->
-        <flow-ref doc:name="api-implementation" name="api-implementation" />
-        <logger doc:name="Logger" level="INFO" message="#[output application/java --- payload]" />
-    </flow>
+<flow name="get:\invoice-metadata:invoice-experience-api-config">
+    <logger level="INFO" doc:name="Logger" message="Received invoice-metadata request"/>
+    
+    <!-- Set operation for Nodinite -->
+    <set-variable value="invoice-metadata" doc:name="operation" variableName="operation"/>
+    
+    <!-- Call Main Implementation -->
+    <flow-ref doc:name="api-implementation" name="api-implementation"/>
+    
+    <logger doc:name="Logger" level="INFO" message="Response sent"/>
+</flow>
     <!-- GET /health Implementation -->
     <flow name="get:\health:invoice-experience-api-config">
         <ee:transform doc:name="Health Response">
