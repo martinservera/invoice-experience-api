@@ -1,99 +1,31 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" 
-      xmlns="http://www.mulesoft.org/schema/mule/core"
+<mule xmlns="http://www.mulesoft.org/schema/mule/core"
+      xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
       xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
-      xsi:schemaLocation="
-http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
 
-    <!-- Main Implementation Flow -->
-    <flow name="main-implementation">
+    <!-- Main Invoice Metadata Handler -->
+    <flow name="main-invoice-metadata-handler" doc:id="6e599c2e-fb29-43c0-a231-1300e6c8a8cd">
+        <set-variable value="invoice-metadata" doc:name="operation" variableName="operation"/>
+        <flow-ref doc:name="invoice.setMainProcessingVars" name="invoice.setMainProcessingVars"/>
         <flow-ref doc:name="commons.nodinite.log" name="commons.nodinite.log"/>
-        <set-variable value="#[vars.nodiniteLoggerObject]" 
-                     doc:name="mainNodiniteLoggerObject" 
-                     variableName="mainNodiniteLoggerObject"/>
-        
-        <!-- Handle Operation -->
-        <flow-ref doc:name="'handle-' ++ vars.operation" 
-                 name="#['handle-' ++ vars.operation]"/>
-        
-        <!-- Preprocess -->
-        <flow-ref doc:name="preprocess-operation" 
-                 name="preprocess-operation"/>
-        
-        <!-- Transform -->
-        <flow-ref doc:name="'transform-' ++ vars.operation" 
-                 name="#['transform-' ++ vars.operation]"/>
-        
-        <!-- Request SAPI -->
-        <flow-ref doc:name="request-invoice-sapi" 
-                 name="request-invoice-sapi"/>
-        
-        <!-- Postprocess -->
-        <flow-ref doc:name="'postprocess-' ++ vars.operation" 
-                 name="#['postprocess-' ++ vars.operation]"/>
-        
-        <!-- Log Success -->
-        <set-variable value="#[output application/json --- 'Handled ' ++ (vars.operationRealName default vars.operation)]" 
-                     doc:name="logText - OperationEnd" 
-                     variableName="logText"/>
-        <set-variable value="#[vars.mainNodiniteLoggerObject]" 
-                     doc:name="nodiniteLoggerObject" 
-                     variableName="nodiniteLoggerObject"/>
-        <flow-ref doc:name="commons.nodinite.logSuccess" 
-                 name="commons.nodinite.logSuccess"/>
-        
-        <error-handler ref="publishMainErrorHandling"/>
-    </flow>
 
-    <!-- Handle get-invoice-metadata -->
-    <sub-flow name="handle-get-invoice-metadata">
-        <!-- Build path with query parameters -->
-        <set-variable 
-    variableName="path" 
-    value="#[output application/json --- '/invoice-metadata?CustomerNumber=' ++ vars.CustomerNumber ++ '&amp;CompanyCode=${zuul::system.Servo.invoice.companyCode}' ++ (if (!isEmpty(vars.DocumentType)) '&amp;DocumentType=' ++ vars.DocumentType else '') ++ (if (!isEmpty(vars.from)) '&amp;from=' ++ vars.from else '') ++ (if (!isEmpty(vars.upto)) '&amp;upto=' ++ vars.upto else '') ++ '&amp;page=' ++ vars.page ++ '&amp;pageSize=' ++ vars.pageSize ++ '&amp;sortBy=' ++ vars.sortBy ++ '&amp;sortOrder=' ++ vars.sortOrder]"
-    doc:name="path"/>
-        
-        <set-variable value="/invoice-metadata" 
-                     doc:name="maskedPath" 
-                     variableName="maskedPath"/>
-        <set-variable value="GET" 
-                     doc:name="method GET" 
-                     variableName="method"/>
-    </sub-flow>
+        <!-- Build SAPI Request -->
+        <set-variable variableName="path" value="#['/invoice-metadata']" doc:name="Set SAPI Path"/>
+        <set-variable variableName="maskedPath" value="#['/invoice-metadata']" doc:name="Set Masked Path"/>
+        <set-variable variableName="method" value="GET" doc:name="Set Method"/>
+        <set-variable variableName="queryParams" value="#[attributes.queryParams]" doc:name="Pass Query Params"/>
 
-    <!-- Preprocess Operation -->
-    <sub-flow name="preprocess-operation">
-        <ee:transform doc:name="IngoingToOutgoingHeader">
-            <ee:message/>
-            <ee:variables>
-                <ee:set-variable resource="dwl/IngoingToOutGoingHeader.dwl" 
-                               variableName="Header"/>
-            </ee:variables>
-        </ee:transform>
-        <flow-ref doc:name="commons.api.header-to-x-header" 
-                 name="commons.api.header-to-x-header"/>
-    </sub-flow>
+        <!-- Call Invoice SAPI -->
+        <flow-ref doc:name="invoice.request-to-invoice-sapi" name="invoice.request-to-invoice-sapi"/>
 
-    <!-- Transform get-invoice-metadata -->
-    <sub-flow name="transform-get-invoice-metadata">
-        <logger level="INFO" doc:name="no incoming transformation" message="nop"/>
-    </sub-flow>
-
-    <!-- Request Invoice SAPI -->
-    <sub-flow name="request-invoice-sapi">
-        <flow-ref doc:name="request-to-invoice-sapi" 
-                 name="request-to-invoice-sapi"/>
-    </sub-flow>
-
-    <!-- Postprocess get-invoice-metadata -->
-    <sub-flow name="postprocess-get-invoice-metadata">
-        <!-- Transform SAPI response to EAPI format -->
-        <ee:transform doc:name="SAPI to EAPI Response">
+        <!-- Transform Response -->
+        <ee:transform doc:name="Transform to EAPI Response">
             <ee:message>
                 <ee:set-payload><![CDATA[%dw 2.0
-output application/json skipNullOn="everywhere"
+output application/json
 ---
 {
     data: payload.Data,
@@ -101,18 +33,49 @@ output application/json skipNullOn="everywhere"
 }]]></ee:set-payload>
             </ee:message>
         </ee:transform>
-    </sub-flow>
-    
-    <!-- Check SAPI Health -->
-    <sub-flow name="check-sapi-health">
-        <set-variable value="/health" 
-                     doc:name="path" 
-                     variableName="path"/>
-        <set-variable value="GET" 
-                     doc:name="method GET" 
-                     variableName="method"/>
-        <flow-ref doc:name="request-to-invoice-sapi" 
-                 name="request-to-invoice-sapi"/>
+
+        <flow-ref doc:name="commons.nodinite.logSuccess" name="commons.nodinite.logSuccess"/>
+        <error-handler ref="invoice.publishMainErrorHandling"/>
+    </flow>
+
+    <!-- Health Check for SAPI -->
+    <sub-flow name="check-sapi-health" doc:id="54473402-b9c2-4e4a-8e75-94e8c76f540a">
+        <set-variable value="health-check" variableName="operation" doc:name="Set operation"/>
+        <set-variable variableName="path" value="/health" doc:name="Set Health Path"/>
+        <set-variable variableName="method" value="GET" doc:name="Set Method"/>
+        <set-variable variableName="maskedPath" value="/health" doc:name="Set Masked Path"/>
+
+        <try doc:name="Try SAPI Health Check">
+            <flow-ref doc:name="invoice.request-to-invoice-sapi" name="invoice.request-to-invoice-sapi"/>
+            <ee:transform doc:name="Set Success Response">
+                <ee:message/>
+                <ee:variables>
+                    <ee:set-variable variableName="healthCheckResult"><![CDATA[%dw 2.0
+output application/json
+---
+{
+    status: "UP",
+    sapi: payload
+}]]></ee:set-variable>
+                </ee:variables>
+            </ee:transform>
+            <error-handler>
+                <on-error-continue>
+                    <ee:transform doc:name="Set Error Response">
+                        <ee:message/>
+                        <ee:variables>
+                            <ee:set-variable variableName="healthCheckResult"><![CDATA[%dw 2.0
+output application/json
+---
+{
+    status: "DOWN",
+    error: error.description
+}]]></ee:set-variable>
+                        </ee:variables>
+                    </ee:transform>
+                </on-error-continue>
+            </error-handler>
+        </try>
     </sub-flow>
 
 </mule>

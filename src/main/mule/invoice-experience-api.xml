@@ -22,7 +22,7 @@
             </http:error-response>
         </http:listener>
         <apikit:router config-ref="invoice-experience-api-config" />
-        <error-handler ref="apiMainErrorHandler" />
+        <error-handler ref="invoice.apiMainErrorHandler" />
     </flow>
     <!-- Console Flow -->
     <flow name="invoice-experience-api-console">

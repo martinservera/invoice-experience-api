@@ -9,8 +9,8 @@ http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/cor
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
 
-    <!-- Set Main Processing Variables -->
-    <sub-flow name="setMainProcessingVars">
+    <!-- Invoice EAPI: Set Main Processing Variables -->
+    <sub-flow name="invoice.setMainProcessingVars">
         <set-variable 
             variableName="callURI" 
             value="#[attributes.scheme ++ ':/' ++ attributes.localAddress ++ attributes.requestPath ++ '#' ++ attributes.method]"
@@ -23,12 +23,12 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
             value="RestAPI" 
             doc:name="endpointType" 
             variableName="endpointType"/>
-        <flow-ref doc:name="privateSetMainProcessingVars" 
-                 name="privateSetMainProcessingVars"/>
+        <flow-ref doc:name="invoice.privateSetMainProcessingVars" 
+                 name="invoice.privateSetMainProcessingVars"/>
     </sub-flow>
     
-    <!-- Private Set Main Processing Variables -->
-    <sub-flow name="privateSetMainProcessingVars">
+    <!-- Invoice EAPI: Private Set Main Processing Variables -->
+    <sub-flow name="invoice.privateSetMainProcessingVars">
         <set-variable 
             variableName="mainlog4jCategory" 
             value="#[output application/java --- p('app.fullName') ++ '.' ++ (lower(vars.operation) default 'ERROR')]"
@@ -57,8 +57,8 @@ output application/java
         </ee:transform>
     </sub-flow>
     
-    <!-- Set Invoice SAPI Request Variables -->
-    <sub-flow name="setInvoiceSAPIRequestVars">
+    <!-- Invoice EAPI: Set Invoice SAPI Request Variables -->
+    <sub-flow name="invoice.setInvoiceSAPIRequestVars">
         <ee:transform doc:name="requestObject">
             <ee:message/>
             <ee:variables>
@@ -90,17 +90,17 @@ output application/java
         </ee:transform>
     </sub-flow>
     
-    <!-- Request to Invoice SAPI -->
-    <sub-flow name="request-to-invoice-sapi">
-        <flow-ref doc:name="setInvoiceSAPIRequestVars" 
-                 name="setInvoiceSAPIRequestVars"/>
+    <!-- Invoice EAPI: Request to Invoice SAPI -->
+    <sub-flow name="invoice.request-to-invoice-sapi">
+        <flow-ref doc:name="invoice.setInvoiceSAPIRequestVars" 
+                 name="invoice.setInvoiceSAPIRequestVars"/>
         <flow-ref doc:name="commons.nodinite.log" 
                  name="commons.nodinite.log"/>
         <http:request method="#[vars.method]" 
              doc:name="Invoice SAPI Request" 
              path="#[vars.path]" 
              config-ref="HTTP_Invoice_SAPI_Request_configuration">
-    		<http:headers><![CDATA[#[vars.xheaders ++ {
+    		<http:headers><![CDATA[#[{
         		"client_id": p('zuul::system.Servo.invoice.sapi.client_id'),
         		"client_secret": p('zuul::system.Servo.invoice.sapi.client_secret')
     		}]]]></http:headers>
@@ -109,8 +109,8 @@ output application/java
                  name="commons.nodinite.logSuccess"/>
     </sub-flow>
     
-    <!-- Error Handler: publishMainErrorHandling -->
-    <error-handler name="publishMainErrorHandling">
+    <!-- Invoice EAPI: Error Handler -->
+    <error-handler name="invoice.publishMainErrorHandling">
         <on-error-continue enableNotifications="true" 
                           logException="true" 
                           doc:name="On Error Continue" 
@@ -231,8 +231,8 @@ output application/json
         </on-error-propagate>
     </error-handler>
     
-    <!-- API Main Error Handler -->
-    <error-handler name="apiMainErrorHandler">
+    <!-- Invoice EAPI: API Main Error Handler -->
+    <error-handler name="invoice.apiMainErrorHandler">
         <on-error-propagate type="APIKIT:BAD_REQUEST">
             <set-variable 
                 variableName="logtext" 

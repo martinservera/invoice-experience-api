@@ -1,22 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" 
-      xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-      xsi:schemaLocation="
-http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
-
-    <sub-flow name="api-implementation">
-        <logger level="INFO" doc:name="Logger"/>        
-        
-        <set-variable 
-            variableName="logText" 
-            value="#[output application/json --- 'Received ' ++ (vars.operationRealName default vars.operation) ++ ((' request from ' ++ vars.originalSender.System.Name default vars.sender.System.Name) default '')]"
-            doc:name="logText"/>
-        
-        <flow-ref doc:name="setMainProcessingVars" 
-                 name="setMainProcessingVars"/>
-        <flow-ref doc:name="main-implementation" 
-                 name="main-implementation"/>
-    </sub-flow>
-
+<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<flow name="api-implementation">
+		<flow-ref doc:name="main-invoice-metadata-handler" name="main-invoice-metadata-handler"/>
+	</flow>
 </mule>
